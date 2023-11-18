@@ -1,0 +1,256 @@
+---
+title: "EDA Proyecto DataViz"
+author: "Edward Morales - Julian Acevedo"
+date: "2023-11-10"
+output:   
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: "readable" #cosmo - journal
+---
+```{r setup}
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+# EDA proyecto
+
+# Descripción de datos
+
+El siguiente set de datos pertenece a una serie de interacciones registradas en un centro de llamadas por día a lo largo del tiempo. Los datos están registrados por fecha identificando si es un día feriado o no y la cantidad de llamadas registrada por día.
+
+Descripción de columnas:
+- Fecha: fecha de los registros.
+- StateHoliday: indicador de días feriados.
+- Real Calls: número de llamadas registrado en el día.
+
+
+## Carga y visualización de datos
+
+```{r}
+library(readr)
+df_proyect <- read_delim("C:/BK/Julian Acevedo/WFM_2021-11-08/WFM nov.2021/Analitica/U.NORTE/Vizualizacion datos R y Python/Proyecto/ts_dash.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+df_proyect$FECHA <- as.Date(df_proyect$FECHA, format = "%d/%m/%Y")
+
+knitr::kable(head(df_proyect, 5))
+```
+
+## Descripción de los datos
+
+```{r}
+summary(df_proyect)
+```
+
+## Información de los datos
+
+```{r}
+str(df_proyect)
+```
+
+## verificar datos unicos
+
+```{r}
+nunique <- sapply(df_proyect, function(x) length(unique(x)))
+nunique
+```
+
+## Visualizacion de los datos
+
+```{r}
+library(ggplot2)
+
+# Crear el gráfico
+p <- ggplot(df_proyect, aes(x = FECHA, y = `REAL CALLS`)) +
+  geom_line() + 
+  labs(title = 'Serie Temporal de Real Calls', 
+       x = 'Fecha', 
+       y = 'Número de Llamadas') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 50, vjust = 1, hjust = 1))
+
+# Mostrar cada 30 días, puedes usar scale_x_date
+p <- p + scale_x_date(date_breaks = "30 days", date_labels = "%Y-%m-%d")
+
+print(p)
+```
+
+## Histograma
+
+```{r}
+library(ggplot2)
+
+ggplot(df_proyect, aes(x = `REAL CALLS`)) +
+    geom_histogram(aes(y = ..density..), binwidth = 1, colour = "black", fill = "white") +
+    geom_density(alpha = .2, fill = "#FF6666") +
+    labs(title = 'Histograma de REAL CALLS', x = 'REAL CALLS', y = 'Frecuencia')
+
+```
+
+## Boxplot
+
+```{r}
+library(ggplot2)
+
+# Crear el boxplot
+ggplot(df_proyect, aes(y = `REAL CALLS`)) +
+  geom_boxplot() +
+  labs(title = 'Boxplot de REAL CALLS', x = 'REAL CALLS', y = '') +
+  theme_minimal()
+
+```
+
+## Graficas de datos por año, mes y dia
+
+```{r}
+dff <- df_proyect
+dff$AÑO <- format(dff$FECHA, "%Y")
+dff$MES <- format(dff$FECHA, "%B")
+dff$DiaSemana <- format(dff$FECHA, "%A")
+head(dff)
+```
+
+```{r}
+library(ggplot2)
+
+# Crear el boxplot
+ggplot(dff, aes(x = as.factor(AÑO), y = `REAL CALLS`)) +
+  geom_boxplot() +
+  labs(title = 'Boxplot llamadas por Año', x = 'Año', y = 'Valor') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rota las etiquetas del eje X
+
+```
+
+```{r}
+library(ggplot2)
+
+# Crear el boxplot
+ggplot(dff, aes(x = MES, y = `REAL CALLS`)) +
+  geom_boxplot() +
+  labs(title = 'Boxplot llamadas por Mes', x = 'Mes', y = 'Valor') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rota las etiquetas del eje X
+
+```
+
+```{r}
+library(ggplot2)
+library(forcats)
+
+# Ordenar los días de la semana
+dff$DiaSemana <- factor(dff$DiaSemana, levels = c("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"))
+
+# Crear el boxplot
+ggplot(dff, aes(x = DiaSemana, y = `REAL CALLS`)) +
+  geom_boxplot() +
+  labs(title = 'Boxplot llamadas por Día de la Semana', x = 'Día', y = 'Valor') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rota las etiquetas del eje X
+
+```
+
+En los gráficos anteriores podemos identificar que la serie de tiempo de llamadas ha tenido una tendencia positiva a los largo del tiempo, adicional a esto se identifica visualmente una estacionalidad en el comportamiento de las llamadas a lo largo de los meses y mucho más pronunciada cuando lo vemos por día, se entiende que los lunes es cuando mayor cantidad de llamadas ingresa y va descendiendo hasta el día viernes, los sábados y domingos se tienen registros muy bajos de llamadas.
+
+
+## Datos faltantes
+
+```{r}
+sum(is.na(df_proyect$`REAL CALLS`))
+```
+
+# 2. Prueba Dickey-Fuller
+
+```{r}
+library(tseries)
+
+# Realizar la prueba de Dickey-Fuller aumentada
+dickey_fuller_result <- adf.test(df_proyect$`REAL CALLS`)
+
+# Extracción de los resultados
+test_stat <- dickey_fuller_result$statistic
+p_value <- dickey_fuller_result$p.value
+alpha <- 0.05
+
+cat("Hipótesis:\n")
+cat("H0: Serie no estacionaria\n")
+cat("H1: Serie estacionaria\n")
+cat(sprintf("Estadístico de prueba: %.4f\n", test_stat))
+cat(sprintf("p-value: %.4f\n", p_value))
+cat(sprintf("Alpha: %f\n", alpha))
+if (p_value > alpha) {
+  cat("No se rechaza H0, por lo tanto la serie no es estacionaria.\n")
+} else {
+  cat("Se rechaza H0, por lo tanto la serie es estacionaria.\n")
+}
+
+```
+
+# 3. Descomposición
+
+```{r}
+#ts_TGLS_2 <- ts(df_TGLS$Close, frequency=365, start=c(2012, 5))
+ts_proyect <- ts(df_proyect$`REAL CALLS`,frequency=30)
+library(TSstudio)
+ts_decompose(ts_proyect)
+```
+
+
+# 4. Transformacion de serie no estacionaria a estacionaria
+
+```{r}
+library(forecast)
+library(ggplot2)
+
+# Definir una función para crear un gráfico de diferenciación y ACF
+plot_diff_acf <- function(data, lag.max, diff.order = 0, title.prefix = "") {
+  # Aplicar diferenciación
+  data.diff <- diff(data, differences = diff.order)
+  
+  # Crear gráfico de la serie de tiempo diferenciada
+  plot.ts(data.diff, main = paste(title.prefix, "Order Differencing"), ylab = "Value")
+  
+  # Crear gráfico ACF
+  Acf(data.diff, lag.max = lag.max, main = paste(title.prefix, "Order Differencing ACF"))
+}
+
+plot.ts(df_proyect$`REAL CALLS`, main = "Original Series", ylab = "Value")
+Acf(df_proyect$`REAL CALLS`, lag.max = 1300, main = "Real Calls")
+
+for (i in 1:2) {
+  plot_diff_acf(df_proyect$`REAL CALLS`, lag.max = 1300, diff.order = i, title.prefix = paste(i, "nd"))
+}
+
+```
+
+## Primera diferenciación
+
+```{r}
+library(tseries)
+
+# Realizar la diferencia de la serie y eliminar valores NA
+df_proyect_diff <- na.omit(diff(df_proyect$`REAL CALLS`, differences = 1))
+
+# Realizar la prueba de Dickey-Fuller aumentada en la serie diferenciada
+dickey_fuller_result <- adf.test(df_proyect_diff)
+
+# Extracción de los resultados
+test_stat <- dickey_fuller_result$statistic
+p_value <- dickey_fuller_result$p.value
+alpha <- 0.05
+
+cat("Hipotesis:\n")
+cat("H0: Serie no estacionaria\n")
+cat("H1: Serie estacionaria\n")
+cat(sprintf("Estadistico de prueba: %.4f\n", test_stat))
+cat(sprintf("p-value: %.4f\n", p_value))
+cat(sprintf("Alpha: %f\n", alpha))
+if (p_value > alpha) {
+  cat("No se rechaza H0, por lo tanto la serie no es estacionaria.\n")
+} else {
+  cat("Se rechaza H0, por lo tanto la serie es estacionaria.\n")
+}
+
+```
+
