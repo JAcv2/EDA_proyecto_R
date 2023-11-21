@@ -34,8 +34,10 @@ df_proyect <- read_delim("C:/BK/Julian Acevedo/WFM_2021-11-08/WFM nov.2021/Anali
     delim = ";", escape_double = FALSE, trim_ws = TRUE)
 df_proyect$FECHA <- as.Date(df_proyect$FECHA, format = "%d/%m/%Y")
 
-knitr::kable(head(df_proyect, 5))
+knitr::kable(head(df_proyect, 10))
 ```
+
+En la tabla se pueden visualizar la carga de los datos y los primeros 10 registros.
 
 ## Descripción de los datos
 
@@ -43,11 +45,15 @@ knitr::kable(head(df_proyect, 5))
 summary(df_proyect)
 ```
 
+La descripción de los datos muestra que el dataset cuenta con 1367 registros, la variable objetivo 'REAL CALLS' tiene una media de 2215.41.
+
 ## Información de los datos
 
 ```{r}
 str(df_proyect)
 ```
+En la información de los datos descubrimos el tipo de dato date en la columna 'FECHA' y tipo num para las columnas 'StateHoliday' y 'REAL CALLS', en todos sin datos null.
+
 
 ## verificar datos unicos
 
@@ -55,51 +61,50 @@ str(df_proyect)
 nunique <- sapply(df_proyect, function(x) length(unique(x)))
 nunique
 ```
+Al verificar datos únicos encontramos que la columna 'FECHA' tiene 1367 datos únicos por lo tanto no tiene ningún datos repetido, la columna 'StateHoliday' tiene 3 datos únicos y suele ser el identificador del día feriado y la columna 'REALL CALLS' presenta 1039 datos únicos esto quiere decir que se tienen  328 registros donde se repite la cantidad de llamadas reales.
+
 
 ## Visualizacion de los datos
 
 ```{r}
 library(ggplot2)
 
-# Crear el gráfico
-p <- ggplot(df_proyect, aes(x = FECHA, y = `REAL CALLS`)) +
+ggplot(df_proyect, aes(x = FECHA, y = `REAL CALLS`)) +
   geom_line() + 
   labs(title = 'Serie Temporal de Real Calls', 
        x = 'Fecha', 
        y = 'Número de Llamadas') +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 50, vjust = 1, hjust = 1))
-
-# Mostrar cada 30 días, puedes usar scale_x_date
-p <- p + scale_x_date(date_breaks = "30 days", date_labels = "%Y-%m-%d")
-
-print(p)
 ```
+En este grafico se logra identificar que la serie presenta una tendencia positiva.
+
 
 ## Histograma
 
 ```{r}
 library(ggplot2)
-
+bins_sturges <- 1 + log2(length(df_proyect$`REAL CALLS`))
 ggplot(df_proyect, aes(x = `REAL CALLS`)) +
-    geom_histogram(aes(y = ..density..), binwidth = 1, colour = "black", fill = "white") +
+    geom_histogram(aes(y = ..density..), bins_sturges=bins_sturges, colour = "black", fill = "white") +
     geom_density(alpha = .2, fill = "#FF6666") +
     labs(title = 'Histograma de REAL CALLS', x = 'REAL CALLS', y = 'Frecuencia')
 
 ```
+Graficando el histograma se puede identificar que los datos presentan una concentración de datos principalmente a la izquierda de la distribución.
+
 
 ## Boxplot
 
 ```{r}
 library(ggplot2)
-
-# Crear el boxplot
 ggplot(df_proyect, aes(y = `REAL CALLS`)) +
   geom_boxplot() +
   labs(title = 'Boxplot de REAL CALLS', x = 'REAL CALLS', y = '') +
   theme_minimal()
-
 ```
+
+Graficando el boxplot se puede identificar que los datos presentan una concentración de datos principalmente a la izquierda de la distribución.
 
 ## Graficas de datos por año, mes y dia
 
@@ -110,22 +115,22 @@ dff$MES <- format(dff$FECHA, "%B")
 dff$DiaSemana <- format(dff$FECHA, "%A")
 head(dff)
 ```
+Para graficar el comportamiento de los datos por año, mes y día es necesario crear las columnas 'AÑO', 'MES' y 'DiaSemana' con el objetivo de simplificar los filtros por cada una de las agrupaciones.
 
 ```{r}
 library(ggplot2)
-
-# Crear el boxplot
 ggplot(dff, aes(x = as.factor(AÑO), y = `REAL CALLS`)) +
   geom_boxplot() +
   labs(title = 'Boxplot llamadas por Año', x = 'Año', y = 'Valor') +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rota las etiquetas del eje X
-
+  theme(axis.text.x = element_text(angle = 00, hjust = 1))  # Rota las etiquetas del eje X
 ```
+
+En la gráfica por año se observa que a la la medica que aumentan los años la cantidad de llamadas aumenta, lo cual explica gráficamente el comportamiento con tendencia positiva. 
 
 ```{r}
 library(ggplot2)
-
+dff$MES <- factor(dff$MES, levels = c("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"))
 # Crear el boxplot
 ggplot(dff, aes(x = MES, y = `REAL CALLS`)) +
   geom_boxplot() +
@@ -134,6 +139,7 @@ ggplot(dff, aes(x = MES, y = `REAL CALLS`)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rota las etiquetas del eje X
 
 ```
+En la gráfica por meses de identifica una gran variabilidad en los datos a lo largo de cada uno de los meses. Meses como diciembre 'Didiciembre' que presentan una menor variabilidad que otros.
 
 ```{r}
 library(ggplot2)
@@ -157,16 +163,35 @@ En los gráficos anteriores podemos identificar que la serie de tiempo de llamad
 ## Datos faltantes
 
 ```{r}
+library(mice)
+md.pattern(df_proyect, plot = TRUE, rotate.names = TRUE)
+```
+
+
+```{r}
 sum(is.na(df_proyect$`REAL CALLS`))
 ```
 
+El set de datos no tiene datos faltantes. Por lo tanto, no es necesario realizar análisis de datos faltantes.
+
 # 2. Prueba Dickey-Fuller
+
+
+```{r}
+sum(df_proyect$`REAL CALLS`)
+```
+```{r}
+head(df_proyect$`REAL CALLS`)
+```
+```{r}
+tail(df_proyect$`REAL CALLS`)
+```
 
 ```{r}
 library(tseries)
 
 # Realizar la prueba de Dickey-Fuller aumentada
-dickey_fuller_result <- adf.test(df_proyect$`REAL CALLS`)
+dickey_fuller_result <- adf.test(df_proyect$`REAL CALLS`, k = 90)
 
 # Extracción de los resultados
 test_stat <- dickey_fuller_result$statistic
@@ -191,10 +216,18 @@ if (p_value > alpha) {
 
 ```{r}
 #ts_TGLS_2 <- ts(df_TGLS$Close, frequency=365, start=c(2012, 5))
-ts_proyect <- ts(df_proyect$`REAL CALLS`,frequency=30)
+ts_proyect <- ts(df_proyect$`REAL CALLS`,frequency=90)
 library(TSstudio)
 ts_decompose(ts_proyect)
 ```
+
+
+Del gráfico de descomposición podemos concluir lo siguiente:
+
+- Observado: muestra el comportamiento original de la serie.
+- Tendencia: muestra la tendencia positiva que presenta la serie a lo largo del tiempo.
+- Estacionalidad: muestra los patrones que se repiten en la serie, en este caso el patrón semanal es notorio.
+- Residuos: muestran los errores del modelo y en este caso aparentan ser aleatorios y pequeños.
 
 
 # 4. Transformacion de serie no estacionaria a estacionaria
@@ -216,10 +249,10 @@ plot_diff_acf <- function(data, lag.max, diff.order = 0, title.prefix = "") {
 }
 
 plot.ts(df_proyect$`REAL CALLS`, main = "Original Series", ylab = "Value")
-Acf(df_proyect$`REAL CALLS`, lag.max = 1300, main = "Real Calls")
+Acf(df_proyect$`REAL CALLS`, lag.max = 90, main = "Real Calls")
 
 for (i in 1:2) {
-  plot_diff_acf(df_proyect$`REAL CALLS`, lag.max = 1300, diff.order = i, title.prefix = paste(i, "nd"))
+  plot_diff_acf(df_proyect$`REAL CALLS`, lag.max = 90, diff.order = i, title.prefix = paste(i, "nd"))
 }
 
 ```
@@ -253,4 +286,6 @@ if (p_value > alpha) {
 }
 
 ```
+
+Realizando le primera diferenciacion y aplicando nuevamente el test de dicky-fuller concluimos que la serie se puede transformar de no estacionaria a estacionaria aplicando diferenciacion.
 
