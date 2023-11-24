@@ -1,0 +1,12 @@
+name: App_DataViz
+title: App_DataViz
+username: 2b5reu-julian0david-acevedo0pinilla
+account: 2b5reu-julian0david-acevedo0pinilla
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10614026
+bundleId: 7962892
+url: https://2b5reu-julian0david-acevedo0pinilla.shinyapps.io/App_DataViz/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
