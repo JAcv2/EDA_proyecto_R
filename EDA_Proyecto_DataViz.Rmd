@@ -30,7 +30,7 @@ Descripción de columnas:
 
 ```{r}
 library(readr)
-df_proyect <- read_delim("C:/BK/Julian Acevedo/WFM_2021-11-08/WFM nov.2021/Analitica/U.NORTE/Vizualizacion datos R y Python/Proyecto/ts_dash.csv", 
+df_proyect <- read_delim("C:/Users/Edward Morales/Documents/ts_dash.csv", 
     delim = ";", escape_double = FALSE, trim_ws = TRUE)
 df_proyect$FECHA <- as.Date(df_proyect$FECHA, format = "%d/%m/%Y")
 
@@ -288,4 +288,251 @@ if (p_value > alpha) {
 ```
 
 Realizando le primera diferenciacion y aplicando nuevamente el test de dicky-fuller concluimos que la serie se puede transformar de no estacionaria a estacionaria aplicando diferenciacion.
+
+# Cambios Edward
+
+```{r}
+library(forecast)
+library(ggplot2)
+
+plot_diff_acf_pacf <- function(data, lag.max, diff.order = 0, title.prefix = "") {
+  # Aplicar diferenciación
+  data.diff <- diff(data, differences = diff.order)
+  
+  # Crear gráfico de la serie de tiempo diferenciada
+  plot.ts(data.diff, main = paste(title.prefix, "Order Differencing"), ylab = "Value")
+  
+  # Crear gráfico ACF
+  Acf(data.diff, lag.max = lag.max, main = paste(title.prefix, "Order Differencing ACF"))
+  
+  # Resaltar lags múltiplos de 7 en ACF
+  abline(v = seq(7, lag.max, by = 7), col = "red", lty = 2)
+  
+  # Crear gráfico PACF
+  Pacf(data.diff, lag.max = lag.max, main = paste(title.prefix, "Order Differencing PACF"))
+  
+  # Resaltar lags múltiplos de 7 en PACF
+  abline(v = seq(7, lag.max, by = 7), col = "blue", lty = 2)
+}
+
+# Llamar a la función con los datos reales y la diferenciación de primer orden
+plot_diff_acf_pacf(df_proyect$`REAL CALLS`, lag.max = 90, diff.order = 1, title.prefix = "1st")
+
+```
+
+La gráfica de la Función de Autocorrelación (ACF) para la primera diferenciación de una serie temporal muestra picos significativos en lags que son múltiplos de 7, lo que indica una estacionalidad semanal en los datos. Estos picos cruzan las bandas de significancia estadística, lo que sugiere que las correlaciones no son aleatorias sino que reflejan una verdadera relación estacional. No hay evidencia de correlaciones negativas significativas. La disminución gradual de la autocorrelación con lags más largos es típica después de la diferenciación. Esto sugiere que un modelo SARIMA podría ser adecuado para capturar la estacionalidad observada.
+
+
+La gráfica de la Función de Autocorrelación Parcial (PACF) tras una primera diferenciación no muestra patrones de autocorrelación significativos en la mayoría de los lags, lo que sugiere que las correlaciones autoregresivas en los datos son limitadas. El único pico significativo en el primer lag podría indicar una posible relación autoregresiva de orden uno. La ausencia de picos significativos en los lags múltiplos de siete sugiere que la estacionalidad semanal no es evidente en la serie diferenciada. Esto podría indicar que una diferenciación adicional o un modelo ARIMA con un término autoregresivo simple podría ser adecuado para modelar estos datos.
+
+```{r}
+library(tseries)
+
+
+# Asumiendo que 'df_proyect$`REAL CALLS`' es tu serie temporal
+# Primero diferenciamos la serie
+diff_series <- diff(diff(df_proyect$`REAL CALLS`, differences = 1),7)
+
+# Ahora aplicamos la prueba de Dickey-Fuller Aumentada a la serie diferenciada
+result <- adf.test(diff_series, alternative = "stationary")
+
+# Imprimir los resultados de la prueba
+print(result)
+
+```
+La salida del test de Dickey-Fuller muestra que el valor del estadístico de prueba es -19.277 y el valor-p es 0.01, menor que el umbral común de 0.05, lo cual nos permite rechazar la hipótesis nula de que la serie tiene una raíz unitaria (es decir, es no estacionaria) en favor de la hipótesis alternativa de que la serie es estacionaria. Esto indica que, después de diferenciar la serie temporal una vez, se ha alcanzado la estacionariedad.
+
+
+# Modelo predictivo ARIMA
+EN el EDA se utilizo s=7 ya que semanalmete estamos viendo los cambios, pero para esta parte no se utiliza ya que estamos viendo como ARIMA tiene un buen rendimento
+
+```{r}
+library(forecast)
+
+df_proyect_AR <- arima(df_proyect$`REAL CALLS`, order = c(1, 1, 0))
+summary(robusta_md)
+```
+El resumen del modelo ARIMA(1,1,0) muestra que el coeficiente para el término autoregresivo es pequeño y negativo (-0.0408), con un error estándar de 0.0270, lo que puede indicar una influencia leve pero probablemente significativa del valor previo en la predicción del valor actual. La varianza del error del modelo (sigma^2) es bastante grande, lo que sugiere que puede haber una buena cantidad de variabilidad no explicada en los datos. El AIC alto sugiere que el modelo podría mejorarse, posiblemente con términos adicionales o mediante la incorporación de la estacionalidad. Las medidas de error del conjunto de entrenamiento indican que el modelo tiene cierta precisión, pero sería prudente comparar con otros modelos y validarlos con un conjunto de datos de prueba. La autocorrelación residual (ACF1) cercana a cero sugiere que no hay autocorrelación significativa en los residuos.
+
+```{r}
+checkresiduals(robusta_md)
+```
+El resultado del test de Ljung-Box aplicado a los residuos del modelo ARIMA(1,1,0) indica un valor Q* muy alto (1788.2) con 9 grados de libertad y un valor p extremadamente bajo (menor que 2.2e-16). Esto sugiere que hay una autocorrelación significativa en los residuos a varios lags, lo cual implica que el modelo no está capturando toda la estructura de dependencia en los datos. En términos de modelado de series temporales, esto podría significar que el modelo actual es insuficiente y que podrían ser necesarios términos adicionales o un modelo diferente para explicar mejor la dinámica temporal de la serie.
+
+# Modelo predictivo SARIMA
+
+Un aves entedido estto agregamos la frecuensia = 7
+
+
+```{r}
+# Datos en formato de fecha y ordenados
+calls_ts <- ts(df_proyect$`REAL CALLS`)
+
+train_set <- head(calls_ts, -28)
+
+test_set <- tail(calls_ts, 28)
+```
+
+
+```{r}
+train_set7 <- diff(train_set, 7)
+
+ts_plot(train_set7,
+        title = "Real CALL - First Seasonal Difference",
+        Ytitle = "Real CALL (Difference)",
+        Xtitle = "Year")
+
+
+```
+
+Se logro eliminar la tendencia de la serie, pero sigue manteniedn la variación por ende la serie aún no es estable. Por lo tanto,tomamos la primera diferencia de la serie:
+
+
+```{r}
+train_set71 <- diff(diff(train_set7, 1))
+
+ts_plot(train_set71,
+        title = "Real CALL -  First Seasonal and Non-Seasonal Differencing",
+        Ytitle = "Real CALL (Difference)",
+        Xtitle = "Year")
+```
+
+Apesar de tomar la diferenciación de primer orden, junto con la diferenciación estacional de primer orden, la serie no se estabilizó en torno a la línea del eje x cero.
+
+```{r}
+par(mfrow=c(1,2))
+acf(train_set71, lag.max = 60)
+pacf(train_set71, lag.max = 60)
+```
+# Auto-ARIMA
+
+
+```{r}
+train_set <- ts(train_set, frequency = 7)
+fit <- auto.arima(train_set, seasonal = TRUE)
+fit
+
+```
+El modelo mejoro en comparación al anterior teniendo el anterior un AIC de (24071.5). Ademas el componente autoregresivo de primer orden (ar1) es positivo y significativo, lo que sugiere un fuerte efecto persistente de un periodo a otro. Los coeficientes de media móvil (ma1 y ma2) sugieren ajustes en la predicción basados en los errores de los dos periodos anteriores. Los términos estacionales de media móvil (sma1 y sma2) también son significativos, lo que indica patrones estacionales importantes en los datos. La varianza del error del modelo (sigma^2) y el logaritmo de verosimilitud indican el ajuste del modelo, y los valores de AIC y BIC relativamente bajos sugieren un buen equilibrio entre ajuste y complejidad del modelo.
+
+```{r}
+# Datos en formato de fecha y ordenados
+calls_ts <- ts(df_proyect$`REAL CALLS`, frequency = 7)
+
+
+train_set <- head(calls_ts, -28)
+
+test_set <- tail(calls_ts, 28)
+
+```
+
+```{r}
+# Pronosticar las siguientes 28 observaciones
+forecast <- forecast(fit, h = 28)
+
+
+```
+```{r}
+accuracy(forecast, test_set)
+```
+Los resultados muestran métricas de error para un conjunto de entrenamiento y un conjunto de prueba de un modelo de pronóstico. Las métricas indican un mejor rendimiento en el conjunto de entrenamiento que en el de prueba, como se ve en el menor RMSE y MAE. El valor positivo de ME (Error Medio) sugiere una subestimación sistemática en el conjunto de entrenamiento y una sobreestimación en el conjunto de prueba. La precisión del pronóstico para el conjunto de prueba, indicada por Theil's U, es relativamente baja, lo que sugiere que hay margen de mejora en el modelo. La significancia del ACF1 cercana a cero indica que no hay autocorrelación en los residuos, lo cual es positivo.
+
+```{r}
+test_forecast(calls_ts,
+              forecast.obj = forecast,
+              test = test_set)
+```
+
+
+
+
+```{r}
+final_md <- arima(calls_ts, order = c(1,0,2), 
+                  seasonal = list(order = c(0,1,2)))
+```
+
+```{r}
+checkresiduals(final_md)
+
+```
+
+La salida del test de Ljung-Box para los residuos de un modelo SARIMA(1,0,2)(0,1,2)[7] muestra un estadístico Q* de 16.216 con 9 grados de libertad y un valor-p de 0.06251. Dado que el valor-p está justo por encima del umbral común de 0.05, no podemos rechazar la hipótesis nula de independencia en los residuos a un nivel de confianza del 95%. Esto sugiere que no hay evidencia suficiente de autocorrelaciones significativas en los residuos del modelo y que el modelo está capturando adecuadamente la estructura de autocorrelación de la serie temporal. Sin embargo, al estar tan cerca del límite, sería prudente revisar este resultado con diferentes números de lags y también comparar con otros modelos para confirmar la robustez del modelo actual.
+
+```{r}
+reall <- forecast(final_md, h = 28)
+
+
+plot_forecast(reall,
+              title = "Reall Call - Forecast",
+              Ytitle = "Call",
+              Xtitle = "Year")
+```
+
+
+```{r}
+test_forecast(calls_ts,
+              forecast.obj = forecast,
+              test = test_set)
+```
+
+
+
+Manual
+
+```{r}
+best_ARIMA <- function(ts_in, p_n, d_n, q_n) {
+  best_aic <- Inf
+  best_order <- NULL
+  best_seasonal_order <- NULL
+  fit <- NULL
+  
+  for(p in 0:p_n) {
+    for(d in 0:d_n) {
+      for(q in 0:q_n) {
+        for(P in 0:p_n) {
+          for(D in 0:d_n) {
+            for(Q in 0:q_n) {
+              tryCatch({
+                fit <- arima(ts_in, 
+                             order = c(p, d, q), 
+                             seasonal = list(order = c(P, D, Q), period = 7),
+                             method = "CSS-ML")
+                tmp_aic <- AIC(fit)
+                if (tmp_aic < best_aic) {
+                  best_aic <- tmp_aic
+                  best_order <- c(p, d, q)
+                  best_seasonal_order <- c(P, D, Q)
+                }
+              }, error = function(e){})
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return(list(best_aic = best_aic, best_order = best_order, best_seasonal_order = best_seasonal_order))
+}
+
+```
+
+
+
+```{r}
+best_model <- best_ARIMA(calls_ts, 2, 2, 2)
+
+```
+
+```{r}
+best_model
+```
+Ya que el modelo buscado manual mente tiene un peor AIC nos quedaremos con el auto-ARIMA
+
+
+
+
+
+
+
+
 
